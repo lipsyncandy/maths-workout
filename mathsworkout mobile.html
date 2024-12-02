@@ -1,0 +1,295 @@
+<html><head><base href="." /><title>Math Workout with Timer</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<style>
+  body {
+    font-family: Arial, sans-serif;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-height: 100vh;
+    margin: 0;
+    padding: 20px;
+    background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+    position: relative;
+    padding-bottom: 100px;
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .problem-container {
+    font-size: clamp(2rem, 5vw, 3.5rem);
+    margin: 20px;
+    padding: 30px;
+    border-radius: 10px;
+    background: white;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    width: 90%;
+    max-width: 400px;
+    text-align: center;
+  }
+
+  .problems {
+    display: flex;
+    flex-direction: column;
+    gap: 30px;
+    width: 100%;
+    max-width: 600px;
+    padding: 0 15px;
+  }
+
+  .problem {
+    padding: 20px;
+    border-radius: 15px;
+    background: white;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    width: 100%;
+    max-width: 100%;
+    font-size: clamp(1.8rem, 4vw, 3rem);
+    box-sizing: border-box;
+  }
+
+  .easy {
+    border-left: 8px solid #27ae60;
+  }
+
+  .hard {
+    border-left: 8px solid #e74c3c;
+  }
+
+  .timer {
+    font-size: clamp(2.5rem, 6vw, 4rem);
+    color: #e74c3c;
+    margin: 20px;
+  }
+
+  .answer {
+    font-size: clamp(1.6rem, 3.5vw, 2.8rem);
+    color: #27ae60;
+    opacity: 0;
+    transition: opacity 0.5s ease;
+    margin-top: 15px;
+  }
+
+  .answer.show {
+    opacity: 1;
+  }
+
+  button {
+    font-size: clamp(1.2rem, 3vw, 1.4rem);
+    padding: 15px 30px;
+    margin: 10px;
+    border: none;
+    border-radius: 5px;
+    background: #3498db;
+    color: white;
+    cursor: pointer;
+    transition: transform 0.1s;
+    position: fixed;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 1000;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+  }
+
+  button:hover, button:active {
+    transform: translateX(-50%) scale(1.05);
+  }
+
+  .progress-bar {
+    width: 90%;
+    max-width: 400px;
+    height: 12px;
+    background: #eee;
+    border-radius: 6px;
+    overflow: hidden;
+  }
+
+  .progress {
+    width: 100%;
+    height: 100%;
+    background: #3498db;
+    transform-origin: left;
+    transform: scaleX(1);
+    transition: transform 15s linear;
+  }
+
+  .progress.running {
+    transform: scaleX(0);
+  }
+
+  h1 {
+    font-size: clamp(2rem, 5vw, 3rem);
+    margin-bottom: 30px;
+    text-align: center;
+  }
+
+  @media (max-width: 480px) {
+    body {
+      padding: 10px;
+      padding-bottom: 80px;
+    }
+
+    .problem {
+      padding: 15px;
+    }
+  }
+</style>
+</head>
+<body>
+  <h1>Math Workout!</h1>
+  <div class="problems">
+    <div class="problem easy">
+      <div id="easyProblem">Easy: Click Start for a new problem!</div>
+      <div class="answer" id="easyAnswer"></div>
+    </div>
+    <div class="problem hard">
+      <div id="hardProblem">Hard: Click Start for a new problem!</div>
+      <div class="answer" id="hardAnswer"></div>
+    </div>
+  </div>
+  <div class="progress-bar">
+    <div class="progress" id="progress"></div>
+  </div>
+  <div class="timer" id="timer">15</div>
+  <button ontouchstart="generateNewProblems()" onclick="generateNewProblems()">Start New Problems</button>
+
+  <script>
+    const operators = ['+', '-', '×', '÷'];
+    let timerInterval;
+    let easyAnswer, hardAnswer;
+    
+    const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    
+    function createSmoothBeep(frequency, duration, type = 'sine') {
+      const oscillator = audioContext.createOscillator();
+      const gainNode = audioContext.createGain();
+      
+      oscillator.type = type;
+      oscillator.frequency.setValueAtTime(frequency, audioContext.currentTime);
+      
+      gainNode.gain.setValueAtTime(0, audioContext.currentTime);
+      gainNode.gain.linearRampToValueAtTime(0.2, audioContext.currentTime + 0.01);
+      gainNode.gain.linearRampToValueAtTime(0, audioContext.currentTime + duration);
+      
+      oscillator.connect(gainNode);
+      gainNode.connect(audioContext.destination);
+      
+      oscillator.start();
+      oscillator.stop(audioContext.currentTime + duration);
+    }
+
+    function playStartSound() {
+      createSmoothBeep(660, 0.1);
+      setTimeout(() => createSmoothBeep(880, 0.1), 100);
+    }
+
+    function playTickSound() {
+      createSmoothBeep(440, 0.05);
+    }
+
+    function playEndSound() {
+      createSmoothBeep(440, 0.1);
+      setTimeout(() => createSmoothBeep(330, 0.1), 100);
+      setTimeout(() => createSmoothBeep(220, 0.2), 200);
+    }
+    
+    function generateProblem(isHard) {
+      const maxNum = isHard ? 48 : 12;
+      const num1 = Math.floor(Math.random() * maxNum) + 1;
+      const num2 = Math.floor(Math.random() * maxNum) + 1;
+      const operator = operators[Math.floor(Math.random() * operators.length)];
+      let problem, answer;
+      
+      switch(operator) {
+        case '+':
+          answer = num1 + num2;
+          problem = `${num1} ${operator} ${num2} = ?`;
+          break;
+        case '-':
+          const larger = Math.max(num1, num2);
+          const smaller = Math.min(num1, num2);
+          answer = larger - smaller;
+          problem = `${larger} ${operator} ${smaller} = ?`;
+          break;
+        case '×':
+          answer = num1 * num2;
+          problem = `${num1} ${operator} ${num2} = ?`;
+          break;
+        case '÷':
+          answer = num1;
+          const product = num1 * num2;
+          problem = `${product} ÷ ${num2} = ?`;
+          break;
+      }
+      
+      return { problem, answer };
+    }
+
+    function generateNewProblems() {
+      // Resume audio context if it was suspended (required for mobile)
+      if (audioContext.state === 'suspended') {
+        audioContext.resume();
+      }
+
+      document.getElementById('easyAnswer').classList.remove('show');
+      document.getElementById('hardAnswer').classList.remove('show');
+      document.getElementById('progress').classList.remove('running');
+      void document.getElementById('progress').offsetWidth;
+      
+      playStartSound();
+      
+      const easyProblem = generateProblem(false);
+      const hardProblem = generateProblem(true);
+      
+      document.getElementById('easyProblem').textContent = `Easy: ${easyProblem.problem}`;
+      document.getElementById('hardProblem').textContent = `Hard: ${hardProblem.problem}`;
+      
+      easyAnswer = easyProblem.answer;
+      hardAnswer = hardProblem.answer;
+      
+      startTimer();
+    }
+
+    function startTimer() {
+      let timeLeft = 15;
+      document.getElementById('timer').textContent = timeLeft;
+      document.getElementById('progress').classList.add('running');
+      
+      clearInterval(timerInterval);
+      
+      timerInterval = setInterval(() => {
+        timeLeft--;
+        document.getElementById('timer').textContent = timeLeft;
+        
+        if (timeLeft > 0) {
+          playTickSound();
+        }
+        
+        if (timeLeft <= 0) {
+          clearInterval(timerInterval);
+          showAnswers();
+        }
+      }, 1000);
+    }
+
+    function showAnswers() {
+      const easyAnswerElement = document.getElementById('easyAnswer');
+      const hardAnswerElement = document.getElementById('hardAnswer');
+      
+      easyAnswerElement.textContent = `Answer: ${easyAnswer}`;
+      hardAnswerElement.textContent = `Answer: ${hardAnswer}`;
+      
+      easyAnswerElement.classList.add('show');
+      hardAnswerElement.classList.add('show');
+      
+      playEndSound();
+    }
+
+    // Prevent double-tap zoom on mobile
+    document.addEventListener('touchend', function(event) {
+      event.preventDefault();
+    }, false);
+  </script>
+</body></html>
